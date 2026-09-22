@@ -12,6 +12,16 @@ import time
 import urllib.request
 
 
+def isolated_windows_environment(environ):
+    # os.environ is case-insensitive on Windows, but its dict copy is not.
+    env = {key.upper(): value for key, value in environ.items()}
+    system_root = env.get('SYSTEMROOT') or env.get('WINDIR')
+    if not system_root:
+        raise RuntimeError('Windows environment is missing SYSTEMROOT and WINDIR.')
+    env['PATH'] = str(Path(system_root) / 'System32')
+    return env
+
+
 def main():
     source = Path(sys.argv[1]).resolve()
     with tempfile.TemporaryDirectory(prefix='ktp-exe-') as directory:
@@ -21,8 +31,7 @@ def main():
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
-        env = os.environ.copy()
-        env['PATH'] = str(Path(env['SystemRoot']) / 'System32')
+        env = isolated_windows_environment(os.environ)
         certificate = None
         for attempt in range(2):
             log = root / f'run-{attempt}.log'
