@@ -39,6 +39,9 @@ jobs:
           $package = 'dist/PENAPRINT-TOOLKIT-Windows-x64'
           New-Item -ItemType Directory -Path $package | Out-Null
           Copy-Item dist/KTPStudioServer.exe $package
+          $csc = "$env:SystemRoot/Microsoft.NET/Framework64/v4.0.30319/csc.exe"
+          & $csc /nologo /target:winexe "/out:$package/PENAPRINT-ControlPanel.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.ServiceProcess.dll windows/ControlPanel.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Control Panel compilation failed' }
           Invoke-WebRequest 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe' -OutFile "$package/KTPStudio.exe"
           Invoke-WebRequest 'https://raw.githubusercontent.com/winsw/winsw/v2.12.0/LICENSE.txt' -OutFile "$package/WinSW-LICENSE.txt"
           Copy-Item windows/Install-ExeService.ps1 "$package/Install-Service.ps1"
@@ -70,6 +73,18 @@ jobs:
           $service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, [TimeSpan]::FromSeconds(30))
           python packaging/check_service.py --root "$env:ProgramData/KTPStudio"
           if ($LASTEXITCODE -ne 0) { throw 'Installed HTTPS application failed' }
+          $panel = Start-Process -FilePath "$env:ProgramFiles/PENAPRINT-TOOLKIT/PENAPRINT-ControlPanel.exe" -PassThru
+          try {
+            if (-not $panel.WaitForInputIdle(15000)) { throw 'Control Panel did not initialize' }
+            $panel.Refresh()
+            if ($panel.HasExited -or $panel.MainWindowHandle -eq 0) { throw 'Control Panel window was not created' }
+          } finally {
+            if (-not $panel.HasExited) {
+              $null = $panel.CloseMainWindow()
+              if (-not $panel.WaitForExit(5000)) { $panel.Kill() }
+            }
+            $panel.Dispose()
+          }
           $savedCert = Join-Path $env:RUNNER_TEMP 'penaprint-before-restart.crt'
           Copy-Item "$env:ProgramData/KTPStudio/.local-certs/server.crt" $savedCert
           Restart-Service KTPStudio -ErrorAction Stop

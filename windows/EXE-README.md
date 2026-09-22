@@ -47,3 +47,7 @@ powershell -ExecutionPolicy Bypass -File "C:\ProgramData\KTPStudio\Remove-Servic
 Untuk mencoba tanpa memasang service, jalankan `./KTPStudioServer.exe --ip 192.168.1.10` dari PowerShell di folder yang dapat ditulis. Buka tautan yang muncul. Hentikan dengan Ctrl+C sebelum memasang service pada port yang sama.
 
 `KTPStudio.exe` adalah wrapper service WinSW, sedangkan aplikasi server adalah `KTPStudioServer.exe`. EXE belum ditandatangani dengan sertifikat penerbit. `SHA256SUMS.txt` berisi checksum paket; verifikasi asal unduhan dari repository Anda.
+
+## Panel kontrol
+
+Buka `PENAPRINT-ControlPanel.exe` untuk melihat status, Mulai, Hentikan, Mulai ulang, dan Buka aplikasi. Panel membutuhkan service yang sudah terpasang; perintah start/stop meminta izin Administrator melalui UAC. Shortcut installer membuka panel ini. Jika service belum terpasang, pasang melalui installer atau skrip instalasi terlebih dahulu.

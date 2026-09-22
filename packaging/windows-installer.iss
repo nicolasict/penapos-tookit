@@ -21,8 +21,8 @@ SetupLogging=yes
 Source: "..\dist\PENAPRINT-TOOLKIT-Windows-x64\*"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\PENAPRINT - TOOLKIT"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{commonappdata}\KTPStudio\Open-Portal.ps1"""; WorkingDir: "{commonappdata}\KTPStudio"
-Name: "{commondesktop}\PENAPRINT - TOOLKIT"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{commonappdata}\KTPStudio\Open-Portal.ps1"""
+Name: "{group}\PENAPRINT - TOOLKIT"; Filename: "{app}\PENAPRINT-ControlPanel.exe"
+Name: "{commondesktop}\PENAPRINT - TOOLKIT"; Filename: "{app}\PENAPRINT-ControlPanel.exe"
 Name: "{group}\Kontrol service Windows"; Filename: "{sys}\mmc.exe"; Parameters: "services.msc"
 
 [Code]
