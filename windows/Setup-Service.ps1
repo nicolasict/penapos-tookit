@@ -2,6 +2,12 @@
 #Requires -RunAsAdministrator
 param([string]$IpAddress='')
 $ErrorActionPreference='Stop'
+# This installer runs Windows PowerShell 5.1. Do not inherit PS7 module paths
+# from GitHub Actions or another launching application. Process-local only.
+if($PSVersionTable.PSEdition -eq 'Desktop'){
+    $env:PSModulePath=(Join-Path $PSHOME 'Modules')+';'+(Join-Path $env:ProgramFiles 'WindowsPowerShell\Modules')
+}
+
 $transcriptStarted=$false
 try {
     Start-Transcript -Path (Join-Path $PSScriptRoot 'setup-service.log') -Force | Out-Null

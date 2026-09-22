@@ -47,6 +47,8 @@ jobs:
           Copy-Item vendor/qrcode.LICENSE "$package/QRCode-LICENSE.txt"
           & "$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File packaging/validate_powershell.ps1 -Package $package
           if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell 5.1 syntax validation failed' }
+          & "$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File packaging/test_windows_acl.ps1 -Installer "$package/Install-Service.ps1"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows folder permission test failed' }
           Get-ChildItem "$package/*.exe" | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-String | Set-Content "$package/SHA256SUMS.txt"
           Compress-Archive -Path "$package/*" -DestinationPath dist/PENAPRINT-TOOLKIT-Windows-x64.zip
       - name: Build Windows installer

@@ -37,7 +37,14 @@ function Set-AppFolderAcl([string]$Path,[bool]$ServiceWrite){
         $rule=[System.Security.AccessControl.FileSystemAccessRule]::new($identity,$rights[$sid],[System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit',[System.Security.AccessControl.PropagationFlags]::None,[System.Security.AccessControl.AccessControlType]::Allow)
         $acl.AddAccessRule($rule)
     }
-    Set-Acl -LiteralPath $Path -AclObject $acl
+    # Apply the same restrictive ACL directly, without autoloading
+    # Microsoft.PowerShell.Security from an inherited PS7 module path.
+    $directory=[System.IO.DirectoryInfo]::new($Path)
+    if($PSVersionTable.PSEdition -eq 'Desktop'){
+        $directory.SetAccessControl($acl)
+    } else {
+        [System.IO.FileSystemAclExtensions]::SetAccessControl($directory,$acl)
+    }
 }
 
 $createdFolder=$false
