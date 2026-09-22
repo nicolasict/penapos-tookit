@@ -86,16 +86,16 @@ jobs:
           $service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, [TimeSpan]::FromSeconds(30))
           python packaging/check_service.py --root "$env:ProgramData/KTPStudio"
           if ($LASTEXITCODE -ne 0) { throw 'Installed HTTPS application failed' }
-          $panel = Start-Process -FilePath "$env:ProgramFiles/PENAPRINT-TOOLKIT/PENAPRINT-ControlPanel.exe" -PassThru
+          $panelReport = Join-Path $env:RUNNER_TEMP 'penaprint-panel-test.log'
+          $panel = Start-Process -FilePath "$env:ProgramFiles/PENAPRINT-TOOLKIT/PENAPRINT-ControlPanel.exe" -ArgumentList "--smoke-test `"$panelReport`"" -PassThru
           try {
-            if (-not $panel.WaitForInputIdle(15000)) { throw 'Control Panel did not initialize' }
-            $panel.Refresh()
-            if ($panel.HasExited -or $panel.MainWindowHandle -eq 0) { throw 'Control Panel window was not created' }
+            if (-not $panel.WaitForExit(30000)) { throw 'Control Panel timed out before completing UI verification' }
+            if (Test-Path -LiteralPath $panelReport) { Get-Content -LiteralPath $panelReport | Write-Host }
+            if ($panel.ExitCode -ne 0) { throw "Control Panel crashed or failed UI verification: exit $($panel.ExitCode). See panel report." }
+            if (-not (Test-Path -LiteralPath $panelReport)) { throw 'Control Panel exited without a test report' }
+            if (-not ((Get-Content -LiteralPath $panelReport -Raw).StartsWith('PASS:'))) { throw 'Control Panel did not confirm successful UI verification' }
           } finally {
-            if (-not $panel.HasExited) {
-              $null = $panel.CloseMainWindow()
-              if (-not $panel.WaitForExit(5000)) { $panel.Kill() }
-            }
+            if (-not $panel.HasExited) { $panel.Kill(); $panel.WaitForExit() }
             $panel.Dispose()
           }
           $savedCert = Join-Path $env:RUNNER_TEMP 'penaprint-before-restart.crt'
@@ -109,6 +109,16 @@ jobs:
           while ((Get-Service KTPStudio -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
           if (Get-Service KTPStudio -ErrorAction SilentlyContinue) { throw 'Service was not removed' }
           if (Get-NetFirewallRule -Name KTPStudio-LAN -ErrorAction SilentlyContinue) { throw 'Firewall rule was not removed' }
+      - name: Save panel verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PENAPRINT-ControlPanel-Verification
+          path: |
+            ${{ runner.temp }}/penaprint-panel-test.log
+            ${{ runner.temp }}/penaprint-panel-test.log.png
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Installer diagnostics
         if: failure()
         run: ./packaging/installer_diagnostics.ps1

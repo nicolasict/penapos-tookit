@@ -13,10 +13,44 @@ class ControlPanel : Form {
     readonly string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "KTPStudio");
     static readonly string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), @"WindowsPowerShell\v1.0\powershell.exe");
 
-    [STAThread] static void Main() {
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new ControlPanel());
+    [STAThread] static int Main(string[] args) {
+        bool testing=args.Length==2 && args[0]=="--smoke-test";
+        string report=testing?args[1]:Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"PENAPRINT-TOOLKIT\panel-error.log");
+        try {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            using(var panel=new ControlPanel()) {
+                bool verified=false;
+                if(testing)panel.Shown+=(sender,e)=>panel.BeginInvoke(new Action(()=>{
+                    panel.RefreshStatus();
+                    if(!panel.Visible || !panel.IsHandleCreated || panel.Handle==IntPtr.Zero)
+                        throw new InvalidOperationException("Panel Shown fired without a visible window handle.");
+                    if(panel.start.Enabled || !panel.stop.Enabled || !panel.restart.Enabled || !panel.open.Enabled)
+                        throw new InvalidOperationException("Panel did not detect the running service: "+panel.status.Text);
+                    foreach(var button in new Button[]{panel.start,panel.stop,panel.restart,panel.open})
+                        if(!button.Visible || !button.IsHandleCreated)
+                            throw new InvalidOperationException("Panel button not displayed: "+button.Text);
+                    using(var bitmap=new Bitmap(panel.ClientSize.Width,panel.ClientSize.Height)){
+                        panel.DrawToBitmap(bitmap,panel.ClientRectangle);
+                        bitmap.Save(report+".png",System.Drawing.Imaging.ImageFormat.Png);
+                    }
+                    File.WriteAllText(report,"PASS: panel Shown, window handle, controls, running service and render verified.");
+                    verified=true;
+                    panel.Close();
+                }));
+                Application.Run(panel);
+                if(testing && !verified)throw new InvalidOperationException("Panel exited before Shown verification completed.");
+            }
+            return 0;
+        } catch(Exception error) {
+            try {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(report)));
+                File.WriteAllText(report,error.ToString());
+            } catch { }
+            if(!testing)MessageBox.Show("Panel gagal dibuka: "+error.Message+"\nLog: "+report,"PENAPRINT - TOOLKIT",MessageBoxButtons.OK,MessageBoxIcon.Error);
+            return 1;
+        }
     }
     ControlPanel() {
         Text = "PENAPRINT - TOOLKIT";

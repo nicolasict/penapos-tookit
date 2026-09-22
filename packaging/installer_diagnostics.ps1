@@ -1,5 +1,5 @@
 # Read only explicitly named installer logs; never collect certificates or keys.
-$paths=@((Join-Path $env:RUNNER_TEMP 'penaprint-setup.log'))
+$paths=@((Join-Path $env:RUNNER_TEMP 'penaprint-setup.log'),(Join-Path $env:RUNNER_TEMP 'penaprint-panel-test.log'))
 foreach($base in @($env:ProgramFiles,${env:ProgramFiles(x86)})){
     foreach($name in @('setup-service.log','setup-bootstrap.log','service-rollback.log')){
         if($base){$paths+=Join-Path $base "PENAPRINT-TOOLKIT/$name"}
