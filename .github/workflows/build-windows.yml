@@ -10,7 +10,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 25
     defaults:
       run:
@@ -45,13 +45,8 @@ jobs:
           Copy-Item windows/Open-Portal.ps1,windows/Remove-Service.ps1,windows/Setup-Service.ps1,windows/Uninstall-SetupService.ps1 $package
           Copy-Item windows/EXE-README.md "$package/README.md"
           Copy-Item vendor/qrcode.LICENSE "$package/QRCode-LICENSE.txt"
-          $errorsFound = $false
-          Get-ChildItem "$package/*.ps1" | ForEach-Object {
-            $tokens = $null; $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
-            if ($errors.Count) { $errors | Write-Host; $errorsFound = $true }
-          }
-          if ($errorsFound) { throw 'PowerShell syntax validation failed' }
+          & "$env:SystemRoot/System32/WindowsPowerShell/v1.0/powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File packaging/validate_powershell.ps1 -Package $package
+          if ($LASTEXITCODE -ne 0) { throw 'Windows PowerShell 5.1 syntax validation failed' }
           Get-ChildItem "$package/*.exe" | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-String | Set-Content "$package/SHA256SUMS.txt"
           Compress-Archive -Path "$package/*" -DestinationPath dist/PENAPRINT-TOOLKIT-Windows-x64.zip
       - name: Build Windows installer
@@ -68,9 +63,19 @@ jobs:
           $service = Get-Service KTPStudio -ErrorAction SilentlyContinue
           if (-not $service) { throw 'Installer exited without registering KTPStudio. See installer diagnostics below.' }
           $service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, [TimeSpan]::FromSeconds(30))
+          python packaging/check_service.py --root "$env:ProgramData/KTPStudio"
+          if ($LASTEXITCODE -ne 0) { throw 'Installed HTTPS application failed' }
+          $savedCert = Join-Path $env:RUNNER_TEMP 'penaprint-before-restart.crt'
+          Copy-Item "$env:ProgramData/KTPStudio/.local-certs/server.crt" $savedCert
+          Restart-Service KTPStudio -ErrorAction Stop
+          python packaging/check_service.py --root "$env:ProgramData/KTPStudio" --expected-cert $savedCert
+          if ($LASTEXITCODE -ne 0) { throw 'Service restart or certificate persistence failed' }
           $uninstall = Start-Process -FilePath "$env:ProgramFiles/PENAPRINT-TOOLKIT/unins000.exe" -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw 'Uninstall failed' }
+          $deadline = (Get-Date).AddSeconds(30)
+          while ((Get-Service KTPStudio -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
           if (Get-Service KTPStudio -ErrorAction SilentlyContinue) { throw 'Service was not removed' }
+          if (Get-NetFirewallRule -Name KTPStudio-LAN -ErrorAction SilentlyContinue) { throw 'Firewall rule was not removed' }
       - name: Installer diagnostics
         if: failure()
         run: |
@@ -78,6 +83,7 @@ jobs:
             "$env:RUNNER_TEMP/penaprint-setup.log",
             "$env:ProgramFiles/PENAPRINT-TOOLKIT/setup-service.log",
             "$env:ProgramFiles/PENAPRINT-TOOLKIT/setup-bootstrap.log",
+            "$env:ProgramFiles/PENAPRINT-TOOLKIT/service-rollback.log",
             "${env:ProgramFiles(x86)}/PENAPRINT-TOOLKIT/setup-service.log"
           )
           $paths += @(Get-ChildItem "$env:ProgramData/KTPStudio/logs/*.log" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)

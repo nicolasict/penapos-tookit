@@ -30,7 +30,7 @@ function Set-AppFolderAcl([string]$Path,[bool]$ServiceWrite){
         'S-1-5-19'=[System.Security.AccessControl.FileSystemRights]::ReadAndExecute
     }
     $operatorSid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $rights[$operatorSid]=[System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+    if(-not $rights.ContainsKey($operatorSid)){$rights[$operatorSid]=[System.Security.AccessControl.FileSystemRights]::ReadAndExecute}
     if($ServiceWrite){$rights['S-1-5-19']=[System.Security.AccessControl.FileSystemRights]::Modify}
     foreach($sid in $rights.Keys){
         $identity=[System.Security.Principal.SecurityIdentifier]::new($sid)
@@ -40,10 +40,15 @@ function Set-AppFolderAcl([string]$Path,[bool]$ServiceWrite){
     Set-Acl -LiteralPath $Path -AclObject $acl
 }
 
+$createdFolder=$false
+$installedService=$false
+$createdFirewall=$false
+try {
 New-Item -ItemType Directory -Path $InstallDir | Out-Null
+$createdFolder=$true
 $InstallDir=(Resolve-Path -LiteralPath $InstallDir).Path
 Set-AppFolderAcl $InstallDir $false
-foreach($name in @('logs','.local-certs')){
+foreach($name in @('logs','.local-certs','temp')){
     $folder=Join-Path $InstallDir $name
     New-Item -ItemType Directory -Path $folder | Out-Null
     Set-AppFolderAcl $folder $true
@@ -57,6 +62,8 @@ $template=@"
   <executable>%BASE%\KTPStudioServer.exe</executable>
   <arguments>--ip $IpAddress --port $Port</arguments>
   <workingdirectory>%BASE%</workingdirectory>
+  <env name="TEMP" value="%BASE%\temp" />
+  <env name="TMP" value="%BASE%\temp" />
   <env name="PYTHONIOENCODING" value="utf-8" />
   <startmode>Automatic</startmode>
   <delayedAutoStart>true</delayedAutoStart>
@@ -73,10 +80,44 @@ $config.Save((Join-Path $InstallDir 'KTPStudio.xml'))
 $wrapper=Join-Path $InstallDir 'KTPStudio.exe'
 & $wrapper install
 if($LASTEXITCODE -ne 0){throw 'WinSW gagal memasang service. Periksa file logs.'}
+$installedService=$true
 # Buka hanya port aplikasi untuk perangkat subnet lokal pada jaringan Private.
 New-NetFirewallRule -Name 'KTPStudio-LAN' -DisplayName 'PENAPRINT - TOOLKIT HTTPS (LAN)' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -RemoteAddress LocalSubnet -Profile Private -Program (Join-Path $InstallDir 'KTPStudioServer.exe') | Out-Null
+$createdFirewall=$true
 & $wrapper start
 if($LASTEXITCODE -ne 0){throw 'Service gagal dimulai. Periksa folder logs.'}
 Write-Host "Service dipasang: KTPStudio. Folder: $InstallDir"
 Write-Host 'Buka portal menggunakan Open-Portal.ps1 di folder tersebut.'
 Write-Host 'Percayai sertifikat lokal di Windows dan HP sebelum menggunakan kamera browser.'
+
+$service=Get-Service -Name KTPStudio -ErrorAction Stop
+$service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running,[TimeSpan]::FromSeconds(30))
+$ready=$false
+$deadline=(Get-Date).AddSeconds(60)
+do {
+    $service.Refresh()
+    if($service.Status -eq 'Stopped'){throw 'Service berhenti sebelum aplikasi siap. Periksa log server.'}
+    $log=Join-Path $InstallDir 'logs\KTPStudio.out.log'
+    if((Test-Path $log) -and (Select-String -Path $log -Pattern '#owner=' -Quiet)){$ready=$true;break}
+    Start-Sleep -Milliseconds 500
+} while((Get-Date) -lt $deadline)
+if(-not $ready){throw 'Aplikasi belum siap setelah 60 detik.'}
+} catch {
+    $failure=$_
+    # Roll back only resources created by this invocation, never an existing install.
+    if($installedService){
+        Stop-Service KTPStudio -ErrorAction SilentlyContinue
+        & $wrapper uninstall
+        if($LASTEXITCODE -ne 0){Write-Warning 'Rollback service gagal; file dipertahankan untuk pemeriksaan.'}
+    }
+    if($createdFirewall){Get-NetFirewallRule -Name KTPStudio-LAN -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue}
+    if($createdFolder -and -not (Get-Service KTPStudio -ErrorAction SilentlyContinue)){
+        # Preserve diagnostics outside the application folder before removing owned files.
+        $rollbackLog=Join-Path $PSScriptRoot 'service-rollback.log'
+        Get-ChildItem (Join-Path $InstallDir 'logs') -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object {
+            Get-Content $_.FullName -ErrorAction SilentlyContinue | Add-Content $rollbackLog
+        }
+        Remove-Item -LiteralPath $InstallDir -Recurse -Force
+    }
+    throw $failure
+}
