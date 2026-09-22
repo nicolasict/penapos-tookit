@@ -39,7 +39,7 @@ $appFiles=@('server.py','index.html','app.js','style.css','pairing.js','phone.ht
 foreach($name in $appFiles){if(-not(Test-Path -LiteralPath (Join-Path $sourceRoot $name))){throw "File aplikasi kurang: $name"}}
 
 function Set-AppFolderAcl([string]$Path,[bool]$ServiceWrite){
-    $acl=New-Object System.Security.AccessControl.DirectorySecurity
+    $acl=[System.Security.AccessControl.DirectorySecurity]::new()
     $acl.SetAccessRuleProtection($true,$false)
     $rights=@{
         'S-1-5-18'=[System.Security.AccessControl.FileSystemRights]::FullControl
