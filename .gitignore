@@ -1,0 +1,5 @@
+.local-certs/
+__pycache__/
+*.pyc
+/build/
+/dist/

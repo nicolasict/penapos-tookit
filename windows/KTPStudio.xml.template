@@ -1,0 +1,22 @@
+<service>
+  <id>KTPStudio</id>
+  <name>PENAPRINT - TOOLKIT</name>
+  <description>Server HTTPS lokal untuk foto KTP dari HP dan cetak A4.</description>
+  <executable>@@PYTHON@@</executable>
+  <arguments>-u "%BASE%\server.py" --ip @@IP@@ --port @@PORT@@</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <env name="PATH" value="@@OPENSSL_DIR@@;%PATH%" />
+  <env name="PYTHONIOENCODING" value="utf-8" />
+  <env name="PYTHONDONTWRITEBYTECODE" value="1" />
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>Tcpip</depend>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LocalService</user>
+  </serviceaccount>
+  <onfailure action="restart" delay="15 sec" />
+  <stoptimeout>15 sec</stoptimeout>
+  <logpath>%BASE%\logs</logpath>
+  <log mode="reset" />
+</service>

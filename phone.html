@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f3f3f3"><title>PENAPRINT - TOOLKIT | Kamera</title><link rel="stylesheet" href="phone.css"><script src="perspective.js" defer></script><script src="phone.js" defer></script></head>
+<body class="camera-app" data-screen="capture">
+<header class="topbar"><a class="brand" href="#" aria-label="PENAPRINT - TOOLKIT"><span class="brand-icon">▦</span><span class="brand-name">PENAPRINT <span class="brand-light">- TOOLKIT</span></span></a><span id="connection" class="connection">Menghubungkan…</span><a class="help-button" href="camera-help.html" target="_blank" rel="noopener" aria-label="Bantuan kamera">?</a></header>
+<main>
+
+<div id="capturePanel">
+<div class="screen-heading capture-heading"><h1>Paskan KTP ke bingkai</h1><p id="frameInstruction">Posisikan kartu tegak, sejajar dengan HP.</p></div>
+<div id="cameraStage"><video id="video" autoplay muted playsinline></video><div id="frame"><span>PASKAN TEPI KTP DI SINI</span></div><div id="cameraPlaceholder"><div class="card-outline"><span>▤</span><i></i><i></i></div><strong>Buka kamera untuk mulai</strong></div><span id="cameraBadge" hidden>KAMERA BELAKANG</span></div>
+<details class="camera-details"><summary>Opsi kamera</summary><div class="capture-settings"><label class="auto-setting" for="autoSend"><span><strong>Kirim otomatis</strong><small>Lewati pemeriksaan setelah memotret</small></span><input id="autoSend" type="checkbox" role="switch"><span class="switch" aria-hidden="true"></span></label></div>
+<p id="resolution">Resolusi akan tampil setelah kamera aktif.</p><p>Foto miring? Matikan Kirim otomatis untuk merapikan empat sudut sebelum mengirim.</p><a href="camera-help.html" target="_blank" rel="noopener">Kamera tidak bisa dibuka?</a></details>
+<div class="action-dock"><div class="dock-content"><label class="gallery-button" for="nativeCamera"><span aria-hidden="true">▧</span><span>Pilih foto</span><input id="nativeCamera" type="file" accept="image/*" aria-label="Pilih foto dari galeri"></label><button id="startCamera" class="primary"><span aria-hidden="true">◎</span> Buka kamera</button><button id="shutter" class="primary shutter" disabled hidden><span class="shutter-icon" aria-hidden="true"></span> Ambil foto</button></div><p class="dock-note">Foto dikirim langsung ke komputer Anda</p></div>
+</div>
+<p id="status" class="status" role="status" aria-live="polite">Mempersiapkan sambungan…</p>
+<section id="review" hidden>
+<div class="screen-heading"><p class="eyebrow">RAPIKAN TEPI</p><h1>Sudutnya sudah pas?</h1><p>Tarik titik ke empat sudut KTP. Bagian di luar garis akan dipotong.</p></div>
+<div class="corner-workspace"><svg id="corners" aria-label="Atur empat sudut KTP"></svg><canvas id="loupe" width="180" height="180" hidden aria-hidden="true"></canvas></div>
+<p class="corner-tip"><span>↔</span> Geser titik bernomor. Kaca pembesar membantu melihat tepinya.</p>
+<div class="action-dock"><div class="dock-content"><button id="retake" class="secondary">Foto ulang</button><button id="send" class="primary">Kirim ke komputer <span aria-hidden="true">→</span></button></div><p class="dock-note">Sudut akan diluruskan saat dikirim</p></div>
+</section>
+<section id="sent" hidden>
+<div class="success-icon" aria-hidden="true">✓</div><div class="screen-heading"><p class="eyebrow">BERHASIL DIKIRIM</p><h1>Foto sudah terkirim</h1><p>Lanjutkan di komputer untuk mencetak.</p></div><div class="result-card"><img id="result" alt="Hasil KTP yang dikirim"></div><p id="receipt" role="status"></p>
+<div class="action-dock"><div class="dock-content"><button id="next" class="primary">Foto KTP berikutnya <span aria-hidden="true">＋</span></button></div><p class="dock-note">Kartu sebelumnya tetap ada di komputer</p></div>
+</section>
+</main></body></html>

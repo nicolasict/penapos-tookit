@@ -1,0 +1,82 @@
+name: Build Windows EXE
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: packaging/requirements-build.txt
+      - name: Install build dependencies
+        run: python -m pip install -r packaging/requirements-build.txt
+      - name: Test server
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Build executable
+        run: python -m PyInstaller --clean --noconfirm packaging/ktp-studio.spec
+      - name: Smoke test HTTPS executable
+        run: python packaging/smoke_exe.py dist/KTPStudioServer.exe
+      - name: Package Windows service
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = 'dist/PENAPRINT-TOOLKIT-Windows-x64'
+          New-Item -ItemType Directory -Path $package | Out-Null
+          Copy-Item dist/KTPStudioServer.exe $package
+          Invoke-WebRequest 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe' -OutFile "$package/KTPStudio.exe"
+          Invoke-WebRequest 'https://raw.githubusercontent.com/winsw/winsw/v2.12.0/LICENSE.txt' -OutFile "$package/WinSW-LICENSE.txt"
+          Copy-Item windows/Install-ExeService.ps1 "$package/Install-Service.ps1"
+          Copy-Item windows/Open-Portal.ps1,windows/Remove-Service.ps1,windows/Setup-Service.ps1,windows/Uninstall-SetupService.ps1 $package
+          Copy-Item windows/EXE-README.md "$package/README.md"
+          Copy-Item vendor/qrcode.LICENSE "$package/QRCode-LICENSE.txt"
+          $errorsFound = $false
+          Get-ChildItem "$package/*.ps1" | ForEach-Object {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { $errors | Write-Host; $errorsFound = $true }
+          }
+          if ($errorsFound) { throw 'PowerShell syntax validation failed' }
+          Get-ChildItem "$package/*.exe" | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-String | Set-Content "$package/SHA256SUMS.txt"
+          Compress-Archive -Path "$package/*" -DestinationPath dist/PENAPRINT-TOOLKIT-Windows-x64.zip
+      - name: Build Windows installer
+        run: |
+          $compiler = "${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe"
+          if (-not (Test-Path $compiler)) { throw 'Inno Setup 6 tidak tersedia pada runner.' }
+          & $compiler packaging/windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Smoke test installer and uninstall
+        run: |
+          $setup = Start-Process -FilePath dist/PENAPRINT-TOOLKIT-Setup-x64.exe -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /IP=127.0.0.1' -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Installer failed: $($setup.ExitCode)" }
+          if ((Get-Service KTPStudio).Status -ne 'Running') { throw 'Service is not running' }
+          $uninstall = Start-Process -FilePath "$env:ProgramFiles/PENAPRINT-TOOLKIT/unins000.exe" -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw 'Uninstall failed' }
+          if (Get-Service KTPStudio -ErrorAction SilentlyContinue) { throw 'Service was not removed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PENAPRINT-TOOLKIT-Installer
+          path: dist/PENAPRINT-TOOLKIT-Setup-x64.exe
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PENAPRINT-TOOLKIT-Windows-x64
+          path: dist/PENAPRINT-TOOLKIT-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
