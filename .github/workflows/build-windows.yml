@@ -39,9 +39,22 @@ jobs:
           $package = 'dist/PENAPRINT-TOOLKIT-Windows-x64'
           New-Item -ItemType Directory -Path $package | Out-Null
           Copy-Item dist/KTPStudioServer.exe $package
-          $csc = "$env:SystemRoot/Microsoft.NET/Framework64/v4.0.30319/csc.exe"
-          & $csc /nologo /target:winexe "/out:$package/PENAPRINT-ControlPanel.exe" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.ServiceProcess.dll windows/ControlPanel.cs
+          $csc = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+          $panelSource = Join-Path $env:GITHUB_WORKSPACE 'windows\ControlPanel.cs'
+          if (-not (Test-Path -LiteralPath $panelSource -PathType Leaf)) {
+            throw "Source panel tidak ditemukan: $panelSource. Pastikan windows/ControlPanel.cs ikut di-commit."
+          }
+          $panelSource = (Resolve-Path -LiteralPath $panelSource).ProviderPath
+          $packagePath = (Resolve-Path -LiteralPath $package).ProviderPath
+          $panelOutput = Join-Path $packagePath 'PENAPRINT-ControlPanel.exe'
+          $compilerArguments = @(
+            '/nologo', '/target:winexe', "/out:$panelOutput",
+            '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll',
+            '/reference:System.ServiceProcess.dll', $panelSource
+          )
+          & $csc @compilerArguments
           if ($LASTEXITCODE -ne 0) { throw 'Control Panel compilation failed' }
+          if (-not (Test-Path -LiteralPath $panelOutput -PathType Leaf)) { throw 'Control Panel EXE was not produced' }
           Invoke-WebRequest 'https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe' -OutFile "$package/KTPStudio.exe"
           Invoke-WebRequest 'https://raw.githubusercontent.com/winsw/winsw/v2.12.0/LICENSE.txt' -OutFile "$package/WinSW-LICENSE.txt"
           Copy-Item windows/Install-ExeService.ps1 "$package/Install-Service.ps1"
