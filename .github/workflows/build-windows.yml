@@ -62,12 +62,31 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
       - name: Smoke test installer and uninstall
         run: |
-          $setup = Start-Process -FilePath dist/PENAPRINT-TOOLKIT-Setup-x64.exe -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /IP=127.0.0.1' -Wait -PassThru
+          $setupLog = Join-Path $env:RUNNER_TEMP 'penaprint-setup.log'
+          $setup = Start-Process -FilePath dist/PENAPRINT-TOOLKIT-Setup-x64.exe -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /IP=127.0.0.1 /LOG=`"$setupLog`"" -Wait -PassThru
           if ($setup.ExitCode -ne 0) { throw "Installer failed: $($setup.ExitCode)" }
-          if ((Get-Service KTPStudio).Status -ne 'Running') { throw 'Service is not running' }
+          $service = Get-Service KTPStudio -ErrorAction SilentlyContinue
+          if (-not $service) { throw 'Installer exited without registering KTPStudio. See installer diagnostics below.' }
+          $service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, [TimeSpan]::FromSeconds(30))
           $uninstall = Start-Process -FilePath "$env:ProgramFiles/PENAPRINT-TOOLKIT/unins000.exe" -ArgumentList '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART' -Wait -PassThru
           if ($uninstall.ExitCode -ne 0) { throw 'Uninstall failed' }
           if (Get-Service KTPStudio -ErrorAction SilentlyContinue) { throw 'Service was not removed' }
+      - name: Installer diagnostics
+        if: failure()
+        run: |
+          $paths = @(
+            "$env:RUNNER_TEMP/penaprint-setup.log",
+            "$env:ProgramFiles/PENAPRINT-TOOLKIT/setup-service.log",
+            "$env:ProgramFiles/PENAPRINT-TOOLKIT/setup-bootstrap.log",
+            "${env:ProgramFiles(x86)}/PENAPRINT-TOOLKIT/setup-service.log"
+          )
+          $paths += @(Get-ChildItem "$env:ProgramData/KTPStudio/logs/*.log" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+          foreach ($path in $paths) {
+            if (Test-Path -LiteralPath $path) {
+              Write-Host "Log: $path"
+              Get-Content -LiteralPath $path -Tail 160 | ForEach-Object { $_ -replace '(#owner=|#token=)[A-Za-z0-9_-]+', '$1[REDACTED]' } | Write-Host
+            }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: PENAPRINT-TOOLKIT-Installer

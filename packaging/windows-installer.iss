@@ -27,6 +27,7 @@ Name: "{group}\Kontrol service Windows"; Filename: "{sys}\mmc.exe"; Parameters: 
 
 [Code]
 var NetworkPage: TInputQueryWizardPage;
+    ServiceInstalled: Boolean;
 
 procedure InitializeWizard;
 begin
@@ -59,11 +60,16 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var Code: Integer; Args: String;
 begin
   if CurStep = ssPostInstall then begin
-    Args := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\Setup-Service.ps1') + '"';
+    ServiceInstalled := False;
+    Log('Starting mandatory service installation');
+    Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\Setup-Service.ps1') + '"';
     if Trim(NetworkPage.Values[0]) <> '' then Args := Args + ' -IpAddress "' + Trim(NetworkPage.Values[0]) + '"';
-    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Args := '/D /S /C ""' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') + '" ' + Args + ' > "' + ExpandConstant('{app}\setup-bootstrap.log') + '" 2>&1"';
+    if not Exec(ExpandConstant('{cmd}'), Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
       RaiseException('Tidak dapat menjalankan pemasangan service.');
+    Log('Service installer exit code: ' + IntToStr(Code));
     if Code <> 0 then RaiseException('Pemasangan service gagal. Lihat setup-service.log di folder aplikasi. Hapus instalasi melalui Settings sebelum mencoba ulang.');
+    ServiceInstalled := True;
   end;
 end;
 
@@ -76,4 +82,9 @@ begin
       RaiseException('Tidak dapat menjalankan penghapusan service.');
     if Code <> 0 then RaiseException('Service gagal dihapus. Periksa service KTPStudio sebelum mencoba kembali.');
   end;
+end;
+
+function GetCustomSetupExitCode: Integer;
+begin
+  if ServiceInstalled then Result := 0 else Result := 1;
 end;
